@@ -1570,12 +1570,12 @@ fun DailyStatusView(
                         color = if (isSaved) Emerald500.copy(alpha = 0.2f) else Rose600.copy(alpha = 0.2f)
                     ) {
                         Text(
-                            text = if (isSaved) "Saved $currency ${formatCurrency(summary.remainingBalance)} 🎉"
-                            else "Overspent $currency ${formatCurrency(-summary.remainingBalance)} 🔴",
+                            text = if (isSaved) "Saved $currency ${formatCurrency(summary.remainingBalance)}"
+                            else "Overspent $currency ${formatCurrency(-summary.remainingBalance)}",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = if (isSaved) Emerald500 else Rose600,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                         )
                     }
                 }
@@ -1692,8 +1692,8 @@ fun DailyStatusRowItem(
                         )
 
                         Text(
-                            text = if (isSaved) "Saved $currency ${formatCurrency(item.diff)} ✅"
-                            else "Over $currency ${formatCurrency(-item.diff)} 🔴",
+                            text = if (isSaved) "Saved $currency ${formatCurrency(item.diff)}"
+                            else "Over $currency ${formatCurrency(-item.diff)}",
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -1963,12 +1963,12 @@ fun DailyComparisonChart(
                             color = badgeColor.copy(alpha = 0.18f)
                         ) {
                             Text(
-                                text = if (isSaved) "Saved $currency ${formatCurrency(selectedDayItem.diff)} ✅"
-                                else "Overspent $currency ${formatCurrency(-selectedDayItem.diff)} 🔴",
-                                style = MaterialTheme.typography.labelSmall,
+                                text = if (isSaved) "Saved $currency ${formatCurrency(selectedDayItem.diff)}"
+                                else "Overspent $currency ${formatCurrency(-selectedDayItem.diff)}",
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = badgeColor,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
                             )
                         }
                     }
