@@ -41,6 +41,15 @@ import com.example.data.OtherExpense
 import com.example.ui.theme.*
 import com.example.utils.BudgetCalculator
 import com.example.utils.BudgetSummary
+import com.example.utils.DayStatusItem
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import java.time.Month
 import java.time.format.TextStyle
 import java.util.Locale
@@ -61,6 +70,7 @@ fun MonthlyBudgetScreen(
     var showAddOtherExpenseDialog by remember { mutableStateOf(false) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showMonthPickerModal by remember { mutableStateOf(false) }
+    var showGraphModal by remember { mutableStateOf(false) }
     var activeTab by remember { mutableIntStateOf(0) } // 0: Notepad View, 1: Day Rows View
 
     val monthName = remember(selectedMonth) {
@@ -200,7 +210,8 @@ fun MonthlyBudgetScreen(
             item {
                 TodayInsightBanner(
                     summary = summary,
-                    currency = budgetMonth.currencySymbol
+                    currency = budgetMonth.currencySymbol,
+                    onOpenGraph = { showGraphModal = true }
                 )
             }
 
@@ -251,34 +262,38 @@ fun MonthlyBudgetScreen(
                                 }
                             }
 
-                            // View Mode Switcher
+                            // View Mode Switcher: Note, Status
                             SingleChoiceSegmentedButtonRow {
                                 SegmentedButton(
                                     selected = activeTab == 0,
                                     onClick = { activeTab = 0 },
-                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Notes,
-                                        contentDescription = "Notepad",
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("Notepad", style = MaterialTheme.typography.labelSmall)
-                                }
+                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Notes,
+                                            contentDescription = "Notepad",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text("Note", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                )
                                 SegmentedButton(
                                     selected = activeTab == 1,
                                     onClick = { activeTab = 1 },
-                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CalendarViewDay,
-                                        contentDescription = "Day List",
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("Rows", style = MaterialTheme.typography.labelSmall)
-                                }
+                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Default.FormatListNumbered,
+                                            contentDescription = "Daily Status",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text("Status", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                )
                             }
                         }
 
@@ -286,7 +301,7 @@ fun MonthlyBudgetScreen(
                             text = if (activeTab == 0)
                                 "Type amounts line by line (Line 1 = Day 1, Line 2 = Day 2...)"
                             else
-                                "Tap any day to update spending directly",
+                                "Daily spending breakdown vs dynamic daily limit (Tap any day to edit)",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextMuted
                         )
@@ -297,11 +312,9 @@ fun MonthlyBudgetScreen(
                                 onTextChange = { viewModel.updateDailyNotepadText(it) }
                             )
                         } else {
-                            DayRowsView(
-                                notepadText = budgetMonth.dailyNotepadText,
-                                daysInMonth = summary.daysInMonth,
+                            DailyStatusView(
+                                summary = summary,
                                 currency = budgetMonth.currencySymbol,
-                                todayDay = summary.todayDate,
                                 onDayAmountChange = { day, amount ->
                                     viewModel.updateDayExpense(day, amount)
                                 }
@@ -451,6 +464,66 @@ fun MonthlyBudgetScreen(
             }
         )
     }
+
+    if (showGraphModal) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showGraphModal = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .padding(vertical = 24.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = DarkBackground
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ShowChart,
+                                contentDescription = null,
+                                tint = AccentBlue,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = "Daily Expense Graph",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextMain
+                            )
+                        }
+
+                        IconButton(onClick = { showGraphModal = false }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = TextMuted
+                            )
+                        }
+                    }
+
+                    DailyComparisonChart(
+                        dayStatuses = summary.dayStatuses,
+                        currency = budgetMonth.currencySymbol,
+                        todayDay = summary.todayDate
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -594,6 +667,58 @@ fun SummaryHeaderCard(
 
             HorizontalDivider(color = HeroCardText.copy(alpha = 0.12f), thickness = 1.dp)
 
+            // Workflow Breakdown Row: Monthly Budget - Planned Expenses = Daily Spending Pool
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(HeroCardText.copy(alpha = 0.08f))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "PLANNED EXPENSES",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = HeroCardText.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "-$currency ${formatCurrency(summary.totalOtherExpenses)}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = HeroCardText
+                    )
+                }
+
+                Text(
+                    text = "→",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = HeroCardText.copy(alpha = 0.4f)
+                )
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "DAILY SPENDING POOL",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = HeroCardText.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "$currency ${formatCurrency(summary.dailySpendingPool)}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = HeroCardText
+                    )
+                }
+            }
+
+            HorizontalDivider(color = HeroCardText.copy(alpha = 0.12f), thickness = 1.dp)
+
             // Bottom Section: Safe Daily Limit & Days Remaining Pill Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -659,14 +784,18 @@ fun SummaryHeaderCard(
 @Composable
 fun TodayInsightBanner(
     summary: BudgetSummary,
-    currency: String
+    currency: String,
+    onOpenGraph: () -> Unit
 ) {
     val isSaved = summary.todaySaved >= 0
     val bannerColor = DarkSurface
     val accentColor = if (isSaved) AccentBlue else Rose600
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .clickable { onOpenGraph() },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = bannerColor)
     ) {
@@ -711,18 +840,38 @@ fun TodayInsightBanner(
                 }
             }
 
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = accentColor.copy(alpha = 0.2f)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = if (isSaved) "Saved $currency ${formatCurrency(summary.todaySaved)}"
-                    else "Over $currency ${formatCurrency(-summary.todaySaved)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = accentColor,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = accentColor.copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        text = if (isSaved) "Saved $currency ${formatCurrency(summary.todaySaved)}"
+                        else "Over $currency ${formatCurrency(-summary.todaySaved)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = accentColor,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = AccentBlue.copy(alpha = 0.15f),
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.ShowChart,
+                            contentDescription = "View Graph",
+                            tint = AccentBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -1332,5 +1481,499 @@ fun formatCurrency(amount: Double): String {
         String.format(Locale.getDefault(), "%,d", amount.toLong())
     } else {
         String.format(Locale.getDefault(), "%,.2f", amount)
+    }
+}
+
+@Composable
+fun DailyStatusView(
+    summary: BudgetSummary,
+    currency: String,
+    onDayAmountChange: (Int, Double) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        summary.dayStatuses.forEach { item ->
+            DailyStatusRowItem(
+                item = item,
+                currency = currency,
+                isToday = item.day == summary.todayDate,
+                onAmountSave = { newAmt -> onDayAmountChange(item.day, newAmt) }
+            )
+        }
+
+        // Monthly Outcome Summary Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "MONTHLY OUTCOME SUMMARY",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    letterSpacing = 1.2.sp
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Monthly Budget", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                        Text("$currency ${formatCurrency(summary.startingAmount)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextMain)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Planned Expenses", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                        Text("-$currency ${formatCurrency(summary.totalOtherExpenses)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextMain)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Daily Spending Pool", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = AccentBlue)
+                        Text("$currency ${formatCurrency(summary.dailySpendingPool)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = AccentBlue)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Daily Expenses Spent", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                        Text("-$currency ${formatCurrency(summary.totalDailyExpenses)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextMain)
+                    }
+                }
+
+                HorizontalDivider(color = DarkSurfaceVariant)
+
+                val isSaved = summary.remainingBalance >= 0
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isSaved) "Remaining Net Saved" else "Net Overspent",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMain
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSaved) Emerald500.copy(alpha = 0.2f) else Rose600.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = if (isSaved) "Saved $currency ${formatCurrency(summary.remainingBalance)} 🎉"
+                            else "Overspent $currency ${formatCurrency(-summary.remainingBalance)} 🔴",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSaved) Emerald500 else Rose600,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DailyStatusRowItem(
+    item: DayStatusItem,
+    currency: String,
+    isToday: Boolean,
+    onAmountSave: (Double) -> Unit
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    var inputText by remember(item.spent) {
+        mutableStateOf(if (item.spent > 0) formatCurrency(item.spent) else "")
+    }
+
+    val formattedDay = String.format("%02d", item.day)
+    val isSaved = item.diff >= 0
+    val statusColor = if (isSaved) Emerald500 else Rose600
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { isEditing = true },
+        color = if (isToday) DarkSurfaceVariant else DarkBackground
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Day $formattedDay",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isToday) AccentBlue else TextMain
+                    )
+
+                    if (isToday) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = AccentBlue,
+                            contentColor = HeroCardText
+                        ) {
+                            Text(
+                                text = "TODAY",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 9.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Limit: $currency ${formatCurrency(item.limit)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.sp,
+                    color = TextMuted
+                )
+            }
+
+            if (isEditing) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        modifier = Modifier
+                            .width(90.dp)
+                            .height(48.dp),
+                        singleLine = true,
+                        placeholder = { Text("0") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextMain)
+                    )
+                    IconButton(
+                        onClick = {
+                            val cleanInput = inputText.replace(",", "").trim()
+                            val newAmt = cleanInput.toDoubleOrNull() ?: 0.0
+                            onAmountSave(newAmt)
+                            isEditing = false
+                        }
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = "Save", tint = AccentBlue)
+                    }
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = if (item.spent > 0) "$currency ${formatCurrency(item.spent)}" else "-",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextMain
+                        )
+
+                        Text(
+                            text = if (isSaved) "Saved $currency ${formatCurrency(item.diff)} ✅"
+                            else "Over $currency ${formatCurrency(-item.diff)} 🔴",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Day",
+                        tint = TextMuted.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DailyComparisonChart(
+    dayStatuses: List<DayStatusItem>,
+    currency: String,
+    todayDay: Int
+) {
+    var selectedDayIndex by remember { mutableStateOf<Int?>(null) }
+
+    val activeDays = remember(dayStatuses) {
+        dayStatuses.filter { it.isLogged || it.day <= todayDay || it.spent > 0 }
+    }
+
+    val displayDays = if (activeDays.isEmpty()) dayStatuses.take(10) else activeDays
+
+    val maxVal = remember(displayDays) {
+        val maxLimit = displayDays.maxOfOrNull { it.limit } ?: 100.0
+        val maxSpent = displayDays.maxOfOrNull { it.spent } ?: 100.0
+        maxOf(maxLimit, maxSpent, 100.0) * 1.15
+    }
+
+    val selectedDayItem = selectedDayIndex?.let { idx -> displayDays.getOrNull(idx) }
+        ?: displayDays.find { it.day == todayDay } ?: displayDays.lastOrNull()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "DAILY LIMIT vs ACTUAL EXPENSE",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    color = TextMuted
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(AccentBlue)
+                        )
+                        Text(
+                            text = "Daily Limit",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMain,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(Emerald500)
+                        )
+                        Text(
+                            text = "Actual Spent",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMain,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(Rose600)
+                        )
+                        Text(
+                            text = "Overspent",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .background(DarkBackground, RoundedCornerShape(14.dp))
+                    .padding(12.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(displayDays) {
+                            detectTapGestures { tapOffset ->
+                                val width = size.width
+                                val count = displayDays.size
+                                if (count > 0) {
+                                    val stepX = if (count > 1) width / (count - 1) else width
+                                    val closestIndex = (tapOffset.x / stepX).roundToInt().coerceIn(0, count - 1)
+                                    selectedDayIndex = closestIndex
+                                }
+                            }
+                        }
+                ) {
+                    val width = size.width
+                    val height = size.height
+                    val paddingBottom = 20.dp.toPx()
+                    val chartHeight = height - paddingBottom
+                    val count = displayDays.size
+
+                    if (count == 0) return@Canvas
+
+                    val stepX = if (count > 1) width / (count - 1) else width / 2
+
+                    val gridLines = 4
+                    for (i in 0..gridLines) {
+                        val y = chartHeight * (1 - i.toFloat() / gridLines)
+                        drawLine(
+                            color = DarkSurfaceVariant.copy(alpha = 0.5f),
+                            start = Offset(0f, y),
+                            end = Offset(width, y),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+
+                    val limitPath = Path()
+                    val spentPath = Path()
+
+                    val limitPoints = mutableListOf<Offset>()
+                    val spentPoints = mutableListOf<Offset>()
+
+                    displayDays.forEachIndexed { i, item ->
+                        val x = if (count > 1) i * stepX else width / 2
+                        val limitY = chartHeight * (1 - (item.limit / maxVal).toFloat().coerceIn(0f, 1f))
+                        val spentY = chartHeight * (1 - (item.spent / maxVal).toFloat().coerceIn(0f, 1f))
+
+                        val limitPt = Offset(x, limitY)
+                        val spentPt = Offset(x, spentY)
+
+                        limitPoints.add(limitPt)
+                        spentPoints.add(spentPt)
+
+                        if (i == 0) {
+                            limitPath.moveTo(x, limitY)
+                            spentPath.moveTo(x, spentY)
+                        } else {
+                            limitPath.lineTo(x, limitY)
+                            spentPath.lineTo(x, spentY)
+                        }
+                    }
+
+                    drawPath(
+                        path = limitPath,
+                        color = AccentBlue,
+                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    )
+
+                    drawPath(
+                        path = spentPath,
+                        color = Emerald500,
+                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    )
+
+                    displayDays.forEachIndexed { i, item ->
+                        val limitPt = limitPoints[i]
+                        val spentPt = spentPoints[i]
+                        val isOverspent = item.spent > item.limit && item.spent > 0
+
+                        drawCircle(
+                            color = AccentBlue,
+                            radius = 4.dp.toPx(),
+                            center = limitPt
+                        )
+
+                        val pointColor = if (isOverspent) Rose600 else Emerald500
+                        val radius = if (isOverspent) 6.dp.toPx() else 4.dp.toPx()
+
+                        drawCircle(
+                            color = pointColor,
+                            radius = radius,
+                            center = spentPt
+                        )
+
+                        if (isOverspent) {
+                            drawCircle(
+                                color = Rose600.copy(alpha = 0.3f),
+                                radius = 10.dp.toPx(),
+                                center = spentPt
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (selectedDayItem != null) {
+                val isSaved = selectedDayItem.diff >= 0
+                val badgeColor = if (isSaved) Emerald500 else Rose600
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = DarkBackground,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Day ${String.format("%02d", selectedDayItem.day)} Status",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextMain
+                            )
+                            Text(
+                                text = "Limit: $currency ${formatCurrency(selectedDayItem.limit)}  |  Spent: $currency ${formatCurrency(selectedDayItem.spent)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = badgeColor.copy(alpha = 0.18f)
+                        ) {
+                            Text(
+                                text = if (isSaved) "Saved $currency ${formatCurrency(selectedDayItem.diff)} ✅"
+                                else "Overspent $currency ${formatCurrency(-selectedDayItem.diff)} 🔴",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = badgeColor,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

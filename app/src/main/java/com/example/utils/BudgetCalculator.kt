@@ -8,10 +8,19 @@ data class DayExpenseItem(
     val amount: Double
 )
 
+data class DayStatusItem(
+    val day: Int,
+    val limit: Double,
+    val spent: Double,
+    val diff: Double, // limit - spent (positive = saved, negative = overspent)
+    val isLogged: Boolean
+)
+
 data class BudgetSummary(
     val startingAmount: Double,
     val totalDailyExpenses: Double,
     val totalOtherExpenses: Double,
+    val dailySpendingPool: Double,
     val totalExpenses: Double,
     val remainingBalance: Double,
     val daysInMonth: Int,
@@ -21,7 +30,8 @@ data class BudgetSummary(
     val todayExpense: Double,
     val todayBudget: Double,
     val todaySaved: Double,
-    val isOverbudget: Boolean
+    val isOverbudget: Boolean,
+    val dayStatuses: List<DayStatusItem>
 )
 
 object BudgetCalculator {
@@ -157,6 +167,31 @@ object BudgetCalculator {
         val totalDailyExpenses = dailyExpensesMap.values.sum()
         val totalExpenses = totalDailyExpenses + otherExpensesTotal
         val remainingBalance = startingAmount - totalExpenses
+        val dailySpendingPool = startingAmount - otherExpensesTotal
+
+        // Compute dynamic daily limits & status for each day in month
+        val dayStatuses = mutableListOf<DayStatusItem>()
+        var runningPool = dailySpendingPool
+
+        for (d in 1..daysInMonth) {
+            val daysRemainingFromD = daysInMonth - d + 1
+            val dayLimit = if (daysRemainingFromD > 0) maxOf(0.0, runningPool / daysRemainingFromD) else 0.0
+            val daySpent = dailyExpensesMap[d] ?: 0.0
+            val isLogged = dailyExpensesMap.containsKey(d) || daySpent > 0
+            val diff = dayLimit - daySpent
+
+            dayStatuses.add(
+                DayStatusItem(
+                    day = d,
+                    limit = dayLimit,
+                    spent = daySpent,
+                    diff = diff,
+                    isLogged = isLogged
+                )
+            )
+
+            runningPool -= daySpent
+        }
 
         val loggedDaysCount = maxOf(dailyExpensesMap.size, dailyExpensesMap.keys.maxOrNull() ?: 0)
 
@@ -169,11 +204,9 @@ object BudgetCalculator {
             else -> maxOf(0, daysInMonth - loggedDaysCount)
         }
 
-        val safeDailyLimit = if (daysRemaining > 0) {
-            maxOf(0.0, remainingBalance / daysRemaining)
-        } else {
-            0.0
-        }
+        // Today's dynamic daily limit
+        val todayStatus = dayStatuses.find { it.day == currentDayNum }
+        val safeDailyLimit = todayStatus?.limit ?: (if (daysRemaining > 0) maxOf(0.0, remainingBalance / daysRemaining) else 0.0)
 
         val todayExpense = if (isCurrentMonth) (dailyExpensesMap[currentDayNum] ?: 0.0) else 0.0
         val todayBudget = safeDailyLimit
@@ -183,6 +216,7 @@ object BudgetCalculator {
             startingAmount = startingAmount,
             totalDailyExpenses = totalDailyExpenses,
             totalOtherExpenses = otherExpensesTotal,
+            dailySpendingPool = dailySpendingPool,
             totalExpenses = totalExpenses,
             remainingBalance = remainingBalance,
             daysInMonth = daysInMonth,
@@ -192,7 +226,8 @@ object BudgetCalculator {
             todayExpense = todayExpense,
             todayBudget = todayBudget,
             todaySaved = todaySaved,
-            isOverbudget = remainingBalance < 0
+            isOverbudget = remainingBalance < 0,
+            dayStatuses = dayStatuses
         )
     }
 }
