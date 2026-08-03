@@ -383,7 +383,7 @@ fun MonthlyBudgetScreen(
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("+ Expense", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text("Expense", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -1937,38 +1937,61 @@ fun DailyComparisonChart(
                     color = DarkBackground,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
                                 text = "Day ${String.format("%02d", selectedDayItem.day)} Status",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = TextMain
                             )
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = badgeColor.copy(alpha = 0.18f)
+                            ) {
+                                Text(
+                                    text = if (isSaved) "Saved $currency ${formatCurrency(selectedDayItem.diff)}"
+                                    else "Overspent $currency ${formatCurrency(-selectedDayItem.diff)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = badgeColor,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "Limit: $currency ${formatCurrency(selectedDayItem.limit)}  |  Spent: $currency ${formatCurrency(selectedDayItem.spent)}",
+                                text = "Limit: $currency ${formatCurrency(selectedDayItem.limit)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = "•",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextMuted
                             )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = badgeColor.copy(alpha = 0.18f)
-                        ) {
                             Text(
-                                text = if (isSaved) "Saved $currency ${formatCurrency(selectedDayItem.diff)}"
-                                else "Overspent $currency ${formatCurrency(-selectedDayItem.diff)}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = badgeColor,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                                text = "Spent: $currency ${formatCurrency(selectedDayItem.spent)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted,
+                                maxLines = 1
                             )
                         }
                     }
