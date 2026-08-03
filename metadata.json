@@ -1,0 +1,6 @@
+{
+  "name": "Xpends",
+  "description": "Smart, effortless monthly budget tracker with simple notepad daily expenses, safe daily spending limit, and auto calculations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
