@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -480,6 +482,7 @@ fun MonthlyBudgetScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -1736,6 +1739,14 @@ fun DailyComparisonChart(
     val selectedDayItem = selectedDayIndex?.let { idx -> displayDays.getOrNull(idx) }
         ?: displayDays.find { it.day == todayDay } ?: displayDays.lastOrNull()
 
+    val totalSaved = remember(activeDays) {
+        activeDays.filter { it.diff > 0 }.sumOf { it.diff }
+    }
+    val totalOverspent = remember(activeDays) {
+        activeDays.filter { it.diff < 0 }.sumOf { -it.diff }
+    }
+    val netDiff = totalSaved - totalOverspent
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -1994,6 +2005,107 @@ fun DailyComparisonChart(
                                 maxLines = 1
                             )
                         }
+                    }
+                }
+            }
+
+            // Total Saved vs Overspent Comparison Summary Card
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = DarkBackground,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "SAVINGS VS OVERSPENT SUMMARY",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.1.sp,
+                        color = TextMuted
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Emerald500.copy(alpha = 0.15f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Total Saved",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "$currency ${formatCurrency(totalSaved)}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Emerald500,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.width(10.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Rose600.copy(alpha = 0.15f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Total Overspent",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "$currency ${formatCurrency(totalOverspent)}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Rose600,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Net Difference:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            fontWeight = FontWeight.Medium
+                        )
+                        val netColor = if (netDiff >= 0) Emerald500 else Rose600
+                        val netText = if (netDiff >= 0) "Net Saved $currency ${formatCurrency(netDiff)}" else "Net Overspent $currency ${formatCurrency(-netDiff)}"
+                        Text(
+                            text = netText,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = netColor
+                        )
                     }
                 }
             }
