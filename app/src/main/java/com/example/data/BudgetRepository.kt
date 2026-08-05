@@ -16,6 +16,9 @@ class BudgetRepository(private val dao: BudgetDao) {
     suspend fun addOtherExpense(expense: OtherExpense) =
         dao.insertOtherExpense(expense)
 
+    suspend fun updateOtherExpense(expense: OtherExpense) =
+        dao.updateOtherExpense(expense)
+
     suspend fun deleteOtherExpense(expense: OtherExpense) =
         dao.deleteOtherExpense(expense)
 

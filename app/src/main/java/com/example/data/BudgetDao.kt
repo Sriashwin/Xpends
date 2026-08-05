@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -20,6 +21,9 @@ interface BudgetDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOtherExpense(expense: OtherExpense)
+
+    @Update
+    suspend fun updateOtherExpense(expense: OtherExpense)
 
     @Delete
     suspend fun deleteOtherExpense(expense: OtherExpense)

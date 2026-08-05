@@ -70,6 +70,7 @@ fun MonthlyBudgetScreen(
 
     var showEditStartingAmountDialog by remember { mutableStateOf(false) }
     var showAddOtherExpenseDialog by remember { mutableStateOf(false) }
+    var editingOtherExpense by remember { mutableStateOf<OtherExpense?>(null) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showMonthPickerModal by remember { mutableStateOf(false) }
     var showGraphModal by remember { mutableStateOf(false) }
@@ -409,6 +410,7 @@ fun MonthlyBudgetScreen(
                                     OtherExpenseRow(
                                         expense = expense,
                                         currency = budgetMonth.currencySymbol,
+                                        onEdit = { editingOtherExpense = expense },
                                         onDelete = { viewModel.deleteOtherExpense(expense) }
                                     )
                                 }
@@ -440,6 +442,18 @@ fun MonthlyBudgetScreen(
             onConfirm = { title, amount ->
                 viewModel.addOtherExpense(title, amount)
                 showAddOtherExpenseDialog = false
+            }
+        )
+    }
+
+    editingOtherExpense?.let { expenseToEdit ->
+        EditOtherExpenseDialog(
+            expense = expenseToEdit,
+            currency = budgetMonth.currencySymbol,
+            onDismiss = { editingOtherExpense = null },
+            onConfirm = { updatedTitle, updatedAmount ->
+                viewModel.updateOtherExpense(expenseToEdit, updatedTitle, updatedAmount)
+                editingOtherExpense = null
             }
         )
     }
@@ -886,8 +900,20 @@ fun NotepadEditorView(
     onTextChange: (String) -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
-    var textFieldValue by remember(notepadText) {
+    var textFieldValue by remember {
         mutableStateOf(TextFieldValue(text = notepadText, selection = TextRange(notepadText.length)))
+    }
+
+    LaunchedEffect(isEditing) {
+        if (isEditing) {
+            textFieldValue = TextFieldValue(text = notepadText, selection = TextRange(notepadText.length))
+        }
+    }
+
+    LaunchedEffect(notepadText) {
+        if (!isEditing) {
+            textFieldValue = TextFieldValue(text = notepadText, selection = TextRange(notepadText.length))
+        }
     }
 
     val focusRequester = remember { FocusRequester() }
@@ -1126,7 +1152,21 @@ fun DayRowItem(
     onAmountSave: (Double) -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
-    var inputText by remember(amount) { mutableStateOf(if (amount > 0) formatCurrency(amount) else "") }
+    var inputText by remember {
+        mutableStateOf(
+            if (amount > 0) {
+                if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
+            } else ""
+        )
+    }
+
+    LaunchedEffect(isEditing) {
+        if (isEditing) {
+            inputText = if (amount > 0) {
+                if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
+            } else ""
+        }
+    }
 
     val formattedDay = String.format("%02d", day)
     val backgroundColor = if (isToday) DarkSurfaceVariant else DarkBackground
@@ -1182,10 +1222,10 @@ fun DayRowItem(
                         value = inputText,
                         onValueChange = { inputText = it },
                         modifier = Modifier
-                            .width(100.dp)
+                            .width(110.dp)
                             .height(48.dp),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextMain)
                     )
                     IconButton(
@@ -1228,10 +1268,14 @@ fun DayRowItem(
 fun OtherExpenseRow(
     expense: OtherExpense,
     currency: String,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onEdit() },
         shape = RoundedCornerShape(14.dp),
         color = DarkBackground
     ) {
@@ -1242,7 +1286,7 @@ fun OtherExpenseRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = expense.title.uppercase(),
                     style = MaterialTheme.typography.labelSmall,
@@ -1258,19 +1302,103 @@ fun OtherExpenseRow(
                 )
             }
 
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.size(32.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete Expense",
-                    tint = Rose600,
-                    modifier = Modifier.size(18.dp)
-                )
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Expense",
+                        tint = AccentBlue,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Expense",
+                        tint = Rose600,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+fun EditOtherExpenseDialog(
+    expense: OtherExpense,
+    currency: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Double) -> Unit
+) {
+    var title by remember { mutableStateOf(expense.title) }
+    var amountText by remember {
+        mutableStateOf(
+            if (expense.amount > 0) {
+                if (expense.amount % 1.0 == 0.0) expense.amount.toLong().toString() else expense.amount.toString()
+            } else ""
+        )
+    }
+
+    val cleanAmt = amountText.replace(",", "").trim()
+    val amt = cleanAmt.toDoubleOrNull() ?: 0.0
+    val isSaveEnabled = title.isNotBlank() && amt > 0
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Other Expense") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title (e.g. Laundry, Travel, Rent)") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("edit_expense_title_input")
+                )
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it },
+                    label = { Text("Amount ($currency)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("edit_expense_amount_input")
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (isSaveEnabled) {
+                        onConfirm(title.trim(), amt)
+                    }
+                },
+                enabled = isSaveEnabled,
+                modifier = Modifier.testTag("confirm_edit_expense_btn")
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -1280,7 +1408,17 @@ fun EditStartingAmountDialog(
     onDismiss: () -> Unit,
     onConfirm: (Double) -> Unit
 ) {
-    var textValue by remember { mutableStateOf(if (currentAmount > 0) formatCurrency(currentAmount) else "") }
+    var textValue by remember {
+        mutableStateOf(
+            if (currentAmount > 0) {
+                if (currentAmount % 1.0 == 0.0) currentAmount.toLong().toString() else currentAmount.toString()
+            } else ""
+        )
+    }
+
+    val cleanText = textValue.replace(",", "").trim()
+    val amt = cleanText.toDoubleOrNull()
+    val isSaveEnabled = amt != null && amt >= 0
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1293,7 +1431,7 @@ fun EditStartingAmountDialog(
                     onValueChange = { textValue = it },
                     label = { Text("Starting Amount ($currency)") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("starting_amount_input")
@@ -1303,10 +1441,11 @@ fun EditStartingAmountDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val cleanText = textValue.replace(",", "").trim()
-                    val amt = cleanText.toDoubleOrNull() ?: currentAmount
-                    onConfirm(amt)
+                    if (amt != null) {
+                        onConfirm(amt)
+                    }
                 },
+                enabled = isSaveEnabled,
                 modifier = Modifier.testTag("save_starting_amount_btn")
             ) {
                 Text("Save")
@@ -1329,6 +1468,10 @@ fun AddOtherExpenseDialog(
     var title by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
 
+    val cleanAmt = amountText.replace(",", "").trim()
+    val amt = cleanAmt.toDoubleOrNull() ?: 0.0
+    val isAddEnabled = title.isNotBlank() && amt > 0
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Other Expense") },
@@ -1348,7 +1491,7 @@ fun AddOtherExpenseDialog(
                     onValueChange = { amountText = it },
                     label = { Text("Amount ($currency)") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("expense_amount_input")
@@ -1358,12 +1501,11 @@ fun AddOtherExpenseDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val cleanAmt = amountText.replace(",", "").trim()
-                    val amt = cleanAmt.toDoubleOrNull() ?: 0.0
-                    if (title.isNotBlank() && amt > 0) {
-                        onConfirm(title, amt)
+                    if (isAddEnabled) {
+                        onConfirm(title.trim(), amt)
                     }
                 },
+                enabled = isAddEnabled,
                 modifier = Modifier.testTag("confirm_add_expense_btn")
             ) {
                 Text("Add")

@@ -169,6 +169,18 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun updateOtherExpense(expense: OtherExpense, title: String, amount: Double) {
+        if (title.isBlank() || amount <= 0) return
+        viewModelScope.launch {
+            repository.updateOtherExpense(
+                expense.copy(
+                    title = title.trim(),
+                    amount = amount
+                )
+            )
+        }
+    }
+
     fun deleteOtherExpense(expense: OtherExpense) {
         viewModelScope.launch {
             repository.deleteOtherExpense(expense)
