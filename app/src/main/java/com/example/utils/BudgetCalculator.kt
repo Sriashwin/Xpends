@@ -193,24 +193,44 @@ object BudgetCalculator {
             runningPool -= daySpent
         }
 
-        val loggedDaysCount = maxOf(dailyExpensesMap.size, dailyExpensesMap.keys.maxOrNull() ?: 0)
-
         val isCurrentMonth = todayDate.year == year && todayDate.monthValue == month
+        val isPastMonth = todayDate.year > year || (todayDate.year == year && todayDate.monthValue > month)
         val currentDayNum = if (isCurrentMonth) todayDate.dayOfMonth else 1
 
         val daysRemaining = when {
-            todayDate.year > year || (todayDate.year == year && todayDate.monthValue > month) -> 0
-            isCurrentMonth -> maxOf(0, daysInMonth - maxOf(currentDayNum - 1, loggedDaysCount))
-            else -> maxOf(0, daysInMonth - loggedDaysCount)
+            isPastMonth -> 0
+            isCurrentMonth -> maxOf(1, daysInMonth - currentDayNum + 1)
+            else -> daysInMonth
         }
 
-        // Today's dynamic daily limit
+        // Today's dynamic daily budget allocated before today's spending
         val todayStatus = dayStatuses.find { it.day == currentDayNum }
-        val safeDailyLimit = todayStatus?.limit ?: (if (daysRemaining > 0) maxOf(0.0, remainingBalance / daysRemaining) else 0.0)
-
+        val todayBudget = if (isCurrentMonth) (todayStatus?.limit ?: 0.0) else 0.0
         val todayExpense = if (isCurrentMonth) (dailyExpensesMap[currentDayNum] ?: 0.0) else 0.0
-        val todayBudget = safeDailyLimit
         val todaySaved = todayBudget - todayExpense
+
+        // Dynamic Safe Daily Limit going forward:
+        // Calculates how much the user can safely spend per day for the remaining days of the month
+        val safeDailyLimit = when {
+            remainingBalance <= 0 -> 0.0
+            isPastMonth -> 0.0
+            isCurrentMonth -> {
+                if (todayExpense == 0.0) {
+                    val daysLeftIncToday = maxOf(1, daysInMonth - currentDayNum + 1)
+                    maxOf(0.0, remainingBalance / daysLeftIncToday)
+                } else {
+                    val daysLeftAfterToday = daysInMonth - currentDayNum
+                    if (daysLeftAfterToday > 0) {
+                        maxOf(0.0, remainingBalance / daysLeftAfterToday)
+                    } else {
+                        maxOf(0.0, remainingBalance)
+                    }
+                }
+            }
+            else -> {
+                maxOf(0.0, remainingBalance / daysInMonth)
+            }
+        }
 
         return BudgetSummary(
             startingAmount = startingAmount,
